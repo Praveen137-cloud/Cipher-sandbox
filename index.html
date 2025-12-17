@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Cipher Sandbox 2.0 🕵️‍♂️</title>
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        background-color: #f0f2f5;
+        padding-top: 40px;
+      }
+      .cipher-card {
+        border: none;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+        border-radius: 12px;
+      }
+      .result-box {
+        background-color: #e9ecef;
+        border-left: 5px solid #0d6efd;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-md-8">
+          <div class="card cipher-card p-4 bg-white">
+            <h2 class="text-center mb-4 text-primary">🕵️ Cipher Sandbox</h2>
+
+            <div class="mb-4">
+              <label class="form-label fw-bold">Choose Algorithm:</label>
+              <select
+                id="algoSelect"
+                class="form-select"
+                onchange="toggleInputs()"
+              >
+                <option value="caesar">Caesar Cipher (Shift)</option>
+                <option value="playfair">Playfair Cipher (Matrix)</option>
+              </select>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">Message:</label>
+              <textarea
+                id="messageInput"
+                class="form-control"
+                rows="3"
+                placeholder="Type your secret message..."
+              ></textarea>
+            </div>
+
+            <div id="caesarInputGroup" class="mb-3">
+              <label class="form-label fw-bold">Shift Amount (0-25):</label>
+              <input
+                type="number"
+                id="caesarShift"
+                class="form-control"
+                value="3"
+                min="0"
+                max="25"
+              />
+            </div>
+
+            <div id="playfairInputGroup" class="mb-3" style="display: none">
+              <label class="form-label fw-bold">Secret Keyword:</label>
+              <input
+                type="text"
+                id="playfairKey"
+                class="form-control"
+                placeholder="e.g. MONARCHY"
+              />
+              <div class="form-text">
+                Letters only. 'J' will be treated as 'I'.
+              </div>
+            </div>
+
+            <div class="d-grid gap-2 d-md-block text-center mb-4">
+              <button
+                class="btn btn-primary px-4"
+                onclick="handleAction('encrypt')"
+              >
+                Encrypt 🔒
+              </button>
+              <button
+                class="btn btn-success px-4"
+                onclick="handleAction('decrypt')"
+              >
+                Decrypt 🔓
+              </button>
+            </div>
+
+            <div class="alert result-box">
+              <h5 class="alert-heading">Result:</h5>
+              <p id="outputResult" class="mb-0 fw-bold text-break">...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- UI Logic: Toggle Inputs ---
+      function toggleInputs() {
+        const algo = document.getElementById("algoSelect").value;
+        if (algo === "caesar") {
+          document.getElementById("caesarInputGroup").style.display = "block";
+          document.getElementById("playfairInputGroup").style.display = "none";
+        } else {
+          document.getElementById("caesarInputGroup").style.display = "none";
+          document.getElementById("playfairInputGroup").style.display = "block";
+        }
+      }
+
+      // --- ALGORITHM 1: Caesar Cipher ---
+      function caesarAlgo(text, shift, type) {
+        if (type === "decrypt") shift = 26 - (shift % 26); // Reverse shift for decrypt
+
+        let result = "";
+        for (let i = 0; i < text.length; i++) {
+          let char = text[i];
+          if (char.match(/[a-z]/i)) {
+            const code = text.charCodeAt(i);
+            if (code >= 65 && code <= 90) {
+              char = String.fromCharCode(((code - 65 + shift) % 26) + 65);
+            } else if (code >= 97 && code <= 122) {
+              char = String.fromCharCode(((code - 97 + shift) % 26) + 97);
+            }
+          }
+          result += char;
+        }
+        return result;
+      }
+
+      // --- ALGORITHM 2: Playfair Cipher Helpers ---
+      function generatePlayfairMatrix(key) {
+        let alphabet = "ABCDEFGHIKLMNOPQRSTUVWXYZ";
+        let matrix = [];
+        let usedChars = new Set();
+        let cleanKey = (key + alphabet)
+          .toUpperCase()
+          .replace(/J/g, "I")
+          .replace(/[^A-Z]/g, "");
+
+        for (let char of cleanKey) {
+          if (!usedChars.has(char)) {
+            matrix.push(char);
+            usedChars.add(char);
+          }
+        }
+        return matrix;
+      }
+
+      function preparePlayfairText(text) {
+        text = text
+          .toUpperCase()
+          .replace(/J/g, "I")
+          .replace(/[^A-Z]/g, "");
+        let pairs = "";
+        for (let i = 0; i < text.length; i++) {
+          let char1 = text[i];
+          let char2 = text[i + 1] || "X";
+          if (char1 === char2) {
+            pairs += char1 + "X";
+          } else {
+            pairs += char1 + char2;
+            i++;
+          }
+        }
+        if (pairs.length % 2 !== 0) pairs += "X";
+        return pairs;
+      }
+
+      // --- ALGORITHM 2: Playfair Main Logic ---
+      function playfairAlgo(text, key, type) {
+        let matrix = generatePlayfairMatrix(key);
+        let pairs = preparePlayfairText(text);
+        let result = "";
+        let shiftDir = type === "encrypt" ? 1 : 4; // 1 = Right/Down, 4 = Left/Up (equivalent to -1)
+
+        for (let i = 0; i < pairs.length; i += 2) {
+          let a = pairs[i],
+            b = pairs[i + 1];
+          let idxA = matrix.indexOf(a),
+            idxB = matrix.indexOf(b);
+          let rowA = Math.floor(idxA / 5),
+            colA = idxA % 5;
+          let rowB = Math.floor(idxB / 5),
+            colB = idxB % 5;
+
+          if (rowA === rowB) {
+            // Same Row
+            result += matrix[rowA * 5 + ((colA + shiftDir) % 5)];
+            result += matrix[rowB * 5 + ((colB + shiftDir) % 5)];
+          } else if (colA === colB) {
+            // Same Col
+            result += matrix[((rowA + shiftDir) % 5) * 5 + colA];
+            result += matrix[((rowB + shiftDir) % 5) * 5 + colB];
+          } else {
+            // Rectangle
+            result += matrix[rowA * 5 + colB];
+            result += matrix[rowB * 5 + colA];
+          }
+        }
+        return result;
+      }
+
+      // --- Controller: The Brain 🧠 ---
+      function handleAction(type) {
+        const algo = document.getElementById("algoSelect").value;
+        const message = document.getElementById("messageInput").value;
+        let output = "";
+
+        if (algo === "caesar") {
+          let shift =
+            parseInt(document.getElementById("caesarShift").value) || 0;
+          output = caesarAlgo(message, shift, type);
+        } else {
+          let key = document.getElementById("playfairKey").value;
+          if (!key) {
+            alert("Please enter a keyword for Playfair!");
+            return;
+          }
+          output = playfairAlgo(message, key, type);
+        }
+
+        document.getElementById("outputResult").innerText = output;
+      }
+    </script>
+  </body>
+</html>
